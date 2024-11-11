@@ -1,0 +1,56 @@
+version: '3.8'
+services:
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile.dockerfile
+    restart: always
+    environment:
+      - LOAD_EX=n
+      - EXECUTOR=LocalExecutor
+      - SPARK_HOME=/opt/spark
+      - JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/scripts
+      - ./data:/opt/airflow/data
+    ports:
+      - "8081:8080"
+    command: >
+      bash -c "airflow db init &&
+               airflow webserver & 
+               airflow scheduler"
+    depends_on:
+      - spark
+
+  spark:
+    image: bitnami/spark:latest
+    user: root
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - JAVA_HOME=/opt/bitnami/java
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/opt/airflow/data
+    ports:
+      - "7077:7077"
+      - "8082:8080"
+    command: ["/bin/bash", "-c", "tail -f /dev/null"]
+
+  spark-worker:
+    image: bitnami/spark:latest
+    user: root
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - JAVA_HOME=/opt/bitnami/java
+    depends_on:
+      - spark
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/opt/airflow/data
